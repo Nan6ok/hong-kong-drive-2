@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#101820">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="香港駕駛">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<title>香港 3D 極速駕駛｜V0.1</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101820;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#fff;touch-action:none}
+#game{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}
+#top{position:fixed;top:env(safe-area-inset-top,10px);left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;gap:8px}
+.panel{background:rgba(8,18,27,.78);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:9px 12px;backdrop-filter:blur(10px);box-shadow:0 4px 18px #0005}
+#brand{font-weight:800;font-size:14px;letter-spacing:.5px}#sub{font-size:10px;color:#a9c4d4;margin-top:2px}
+#stats{text-align:right;min-width:105px}#speed{font-size:25px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}#unit{font-size:10px;color:#a9c4d4}
+#hint{position:fixed;top:75px;left:50%;transform:translateX(-50%);font-size:11px;color:#e8f3f8;background:#0a1724b8;padding:7px 12px;border-radius:20px;white-space:nowrap;pointer-events:none}
+#controls{position:fixed;left:0;right:0;bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;justify-content:space-between;align-items:flex-end;padding:0 16px;pointer-events:none}
+.cluster{display:flex;gap:9px;align-items:flex-end;pointer-events:auto}
+.ctrl{width:62px;height:62px;border-radius:18px;border:1px solid #ffffff55;background:#142838d9;color:#fff;font-size:25px;font-weight:700;box-shadow:0 5px 15px #0007;display:grid;place-items:center;user-select:none;-webkit-user-select:none;touch-action:none}
+.ctrl:active,.ctrl.down{background:#1c88a8;transform:scale(.96)}
+.ctrl.long{width:68px;height:72px;font-size:14px;line-height:1.2}
+#rightControls{display:flex;gap:9px;align-items:flex-end}
+#camera{position:fixed;right:14px;top:calc(88px + env(safe-area-inset-top,0px));pointer-events:auto;border:1px solid #ffffff55;background:#142838d9;color:#fff;padding:9px 12px;border-radius:12px;font-size:12px}
+#notice{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#07131fee;border:1px solid #ffffff30;border-radius:18px;padding:20px;max-width:85%;text-align:center;pointer-events:none}
+#notice strong{font-size:18px}#notice p{font-size:12px;line-height:1.6;color:#c2d5df;margin:8px 0 0}
+.hidden{display:none}
+@media(max-width:390px){.ctrl{width:56px;height:58px}.ctrl.long{width:62px;height:68px}#hint{top:72px;font-size:10px}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="top">
+ <div class="panel"><div id="brand">🇭🇰 香港 3D 極速駕駛</div><div id="sub">原創程序化城市・測試版本 V0.1</div></div>
+ <div class="panel" id="stats"><div id="speed">0</div><div id="unit">公里／小時</div></div>
+</div>
+<div id="hint">按住油門前進・左右轉向・倒車減速</div>
+<button id="camera">切換視角</button>
+<div id="notice"><strong>香港 3D 極速駕駛</strong><p>正在載入原創 3D 城市…<br>請橫向握持手機，效果會更好。</p></div>
+<div id="controls">
+ <div class="cluster">
+  <button class="ctrl" data-key="left">◀</button>
+  <button class="ctrl" data-key="right">▶</button>
+ </div>
+ <div id="rightControls">
+  <button class="ctrl long" data-key="brake">煞車<br>倒車</button>
+  <button class="ctrl long" data-key="gas">油門<br>加速</button>
+ </div>
+</div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const root=document.getElementById('game');
+const notice=document.getElementById('notice');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x9bb9c9);
+scene.fog=new THREE.Fog(0x9bb9c9,170,620);
+const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,1200);
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.65));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.05;
+root.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xd9edff,0x59615d,2.0));
+const sun=new THREE.DirectionalLight(0xffe3bd,2.4);
+sun.position.set(-90,150,80);sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);
+sun.shadow.camera.left=-180;sun.shadow.camera.right=180;sun.shadow.camera.top=180;sun.shadow.camera.bottom=-180;
+scene.add(sun);
+
+const mat=(color,rough=.8,metal=0)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});
+const asphalt=mat(0x343a3d),concrete=mat(0x8d9290),roadLine=mat(0xe7e2cf),yellow=mat(0xe6bd45);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),mat(0x687b69));
+ground.rotation.x=-Math.PI/2;ground.position.y=-.18;ground.receiveShadow=true;scene.add(ground);
+
+function box(parent,w,h,d,material,x,y,z,cast=true){
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);
+ m.position.set(x,y,z);m.castShadow=cast;m.receiveShadow=true;parent.add(m);return m;
+}
+
+// 建立十字道路、行人路及路面標線
+const roadGroup=new THREE.Group();scene.add(roadGroup);
+for(let i=-5;i<=5;i++){
+ const p=i*100;
+ const h=new THREE.Mesh(new THREE.PlaneGeometry(24,1200),asphalt);h.rotation.x=-Math.PI/2;h.position.set(p,.005,0);roadGroup.add(h);
+ const v=new THREE.Mesh(new THREE.PlaneGeometry(1200,24),asphalt);v.rotation.x=-Math.PI/2;v.position.set(0,.006,p);roadGroup.add(v);
+ // 行人路
+ for(const s of [-1,1]){
+  const sw=new THREE.Mesh(new THREE.PlaneGeometry(5,1200),concrete);sw.rotation.x=-Math.PI/2;sw.position.set(p+s*14.5,.012,0);roadGroup.add(sw);
+  const sv=new THREE.Mesh(new THREE.PlaneGeometry(1200,5),concrete);sv.rotation.x=-Math.PI/2;sv.position.set(0,.013,p+s*14.5);roadGroup.add(sv);
+ }
+ // 中線虛線
+ for(let z=-590;z<600;z+=18)box(roadGroup,.18,.025,8,roadLine,p,.035,z,false);
+ for(let x=-590;x<600;x+=18)box(roadGroup,8,.025,.18,roadLine,x,.036,p,false);
+ // 路口停止線
+ for(const s of [-1,1]){
+  box(roadGroup,10,.035,.35,roadLine,p+s*7,.04,p-13,false);
+  box(roadGroup,.35,.035,10,roadLine,p-13,.04,p+s*7,false);
+ }
+}
+
+// 原創樓宇：每幢由幾何體、窗戶、露台及天台設備組成
+const buildingMats=[
+ mat(0xc5b9a5),mat(0xaaaeb0),mat(0xd2c9b9),mat(0x8c969b),mat(0xb7a18b),mat(0x737f87)
+];
+const glassMats=[mat(0x294b5c,.28,.35),mat(0x496979,.25,.3),mat(0x243b49,.3,.25)];
+const windowMats=[mat(0x243b48,.25,.25),mat(0x91a9ae,.3,.2)];
+const signMats=[mat(0xd83e32,.5),mat(0xe4b53c,.5),mat(0x277b70,.5)];
+let seed=91273;function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
+function makeBuilding(x,z){
+ const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+ const w=18+rand()*22,d=18+rand()*22,floors=7+Math.floor(rand()*23),fh=2.8+rand()*.22,h=floors*fh;
+ const base=buildingMats[Math.floor(rand()*buildingMats.length)];
+ box(g,w,h,d,base,0,h/2,0);
+ // 窗戶網格：每個窗戶都是獨立原創幾何
+ const cols=Math.max(3,Math.floor(w/2.4)),rows=floors;
+ for(let side=0;side<4;side++){
+  const horizontal=(side%2===0)?w:d;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+   if(rand()<.08)continue;
+   const ww=horizontal/cols*.55,wh=fh*.55;
+   const px=-horizontal/2+(c+.5)*horizontal/cols;
+   const py=fh*(r+.5);
+   let wx,wz,rot=0;
+   if(side===0){wx=px;wz=d/2+.012}
+   if(side===1){wx=px;wz=-d/2-.012}
+   if(side===2){wx=w/2+.012;wz=px;rot=Math.PI/2}
+   if(side===3){wx=-w/2-.012;wz=px;rot=Math.PI/2}
+   const win=new THREE.Mesh(new THREE.BoxGeometry(ww,wh,.045),rand()>.25?glassMats[Math.floor(rand()*glassMats.length)]:windowMats[0]);
+   win.position.set(wx,py,wz);win.rotation.y=rot;g.add(win);
+   if(rand()>.72){
+    const balcony=new THREE.Mesh(new THREE.BoxGeometry(ww*1.1,.12,.55),mat(0x777d7d));
+    balcony.position.set(wx,py-.38,wz+(side===0?.22:side===1?-.22:0));g.add(balcony);
+   }
+  }
+ }
+ // 天台機房、水缸及招牌
+ box(g,w*.32,1.7,d*.3,mat(0x777c7c),-w*.18,h+.85,-d*.12);
+ if(rand()>.45){
+  const tank=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,2.2,12),mat(0x697e84));
+  tank.position.set(w*.22,h+1.1,d*.16);g.add(tank);
+ }
+ if(h<48 && rand()>.35){
+  const sign=box(g,w*.72,2.2,.35,signMats[Math.floor(rand()*signMats.length)],0,h*.55,d/2+.28,false);
+  sign.material=signMats[Math.floor(rand()*signMats.length)];
+ }
+ // 一樓裙樓
+ box(g,w*1.03,3.4,d*1.03,mat(0x777b78),0,1.7,0);
+ return g;
+}
+for(let gx=-5;gx<=5;gx++)for(let gz=-5;gz<=5;gz++){
+ if(Math.abs(gx)<=0&&Math.abs(gz)<=0)continue;
+ const bx=gx*100,bz=gz*100;
+ // 每個街廓放置 2 至 4 幢建築，保留道路及巷道
+ const count=2+Math.floor(rand()*3);
+ for(let n=0;n<count;n++){
+  const x=bx+(rand()-.5)*48,z=bz+(rand()-.5)*48;
+  makeBuilding(x,z);
+ }
+}
+
+// 街燈
+const lampMat=mat(0x30383b,.5,.4),lampLight=new THREE.MeshBasicMaterial({color:0xffe6a6});
+for(let i=-5;i<=5;i++)for(let j=-5;j<=5;j++){
+ if(rand()>.48)continue;
+ const x=i*100+((rand()>.5)?18:-18),z=j*100+((rand()>.5)?18:-18);
+ const pole=box(scene,.22,5,.22,lampMat,x,2.5,z);
+ box(scene,1.7,.16,.18,lampMat,x+.65,4.9,z);
+ const bulb=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),lampLight);bulb.position.set(x+1.35,4.75,z);scene.add(bulb);
+}
+
+// 車輛：以自建車身、玻璃、燈具、輪胎及內裝幾何組成
+const car=new THREE.Group();scene.add(car);
+const bodyPaint=new THREE.MeshStandardMaterial({color:0x102f4d,metalness:.72,roughness:.25});
+const trim=mat(0x101418,.35,.65),rubber=mat(0x17191b,.95),rim=mat(0xb8c2c8,.22,.85);
+const windowMat=new THREE.MeshPhysicalMaterial({color:0x182b35,metalness:.35,roughness:.12,transparent:true,opacity:.86});
+const red= new THREE.MeshBasicMaterial({color:0xff2424}),white=new THREE.MeshBasicMaterial({color:0xf3f5ff});
+box(car,2.05,.62,4.45,bodyPaint,0,.82,0);
+box(car,1.9,.28,1.15,bodyPaint,0,1.23,-1.48);
+box(car,1.72,.8,2.05,bodyPaint,0,1.42,.18);
+box(car,1.62,.58,1.88,windowMat,0,1.49,.18);
+box(car,1.95,.12,1.1,bodyPaint,0,1.88,.18);
+box(car,2.08,.16,.5,trim,0,.62,1.78);
+box(car,2.08,.16,.5,trim,0,.62,-1.85);
+for(const x of [-.72,.72]){
+ box(car,.42,.12,.12,white,x,1.02,2.23);
+ box(car,.42,.12,.12,red,x,1.02,-2.23);
+ // 後視鏡
+ box(car,.22,.16,.32,bodyPaint,x*1.48,1.45,.72);
+ // 車門把手
+ box(car,.28,.055,.06,trim,x*1.42,.98,.2);
+}
+const wheels=[];
+for(const x of [-1.04,1.04])for(const z of [-1.42,1.42]){
+ const wheel=new THREE.Group();wheel.position.set(x,.55,z);car.add(wheel);
+ const tire=new THREE.Mesh(new THREE.CylinderGeometry(.48,.48,.28,24),rubber);tire.rotation.z=Math.PI/2;tire.castShadow=true;wheel.add(tire);
+ const hub=new THREE.Mesh(new THREE.CylinderGeometry(.27,.27,.295,16),rim);hub.rotation.z=Math.PI/2;wheel.add(hub);
+ const cap=new THREE.Mesh(new THREE.CylinderGeometry(.095,.095,.31,12),trim);cap.rotation.z=Math.PI/2;wheel.add(cap);
+ wheels.push(wheel);
+}
+// 車廂簡化儀表台及座椅細節
+box(car,1.35,.12,.35,trim,0,1.05,.88);
+for(const x of [-.48,.48]){
+ box(car,.38,.52,.38,mat(0x202a31),x,1.15,-.05);
+}
+const steering=new THREE.Mesh(new THREE.TorusGeometry(.22,.035,8,24),trim);
+steering.position.set(-.48,1.36,.78);steering.rotation.y=Math.PI/2;car.add(steering);
+car.position.set(0,0,0);
+
+const keys={left:false,right:false,gas:false,brake:false};
+document.querySelectorAll('[data-key]').forEach(btn=>{
+ const k=btn.dataset.key;
+ const on=e=>{e.preventDefault();keys[k]=true;btn.classList.add('down');};
+ const off=e=>{e.preventDefault();keys[k]=false;btn.classList.remove('down');};
+ btn.addEventListener('pointerdown',on);btn.addEventListener('pointerup',off);
+ btn.addEventListener('pointercancel',off);btn.addEventListener('pointerleave',off);
+});
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=true;if(e.key==='ArrowRight'||e.key==='d')keys.right=true;if(e.key==='ArrowUp'||e.key==='w')keys.gas=true;if(e.key==='ArrowDown'||e.key==='s'||e.key===' ')keys.brake=true;});
+addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=false;if(e.key==='ArrowRight'||e.key==='d')keys.right=false;if(e.key==='ArrowUp'||e.key==='w')keys.gas=false;if(e.key==='ArrowDown'||e.key==='s'||e.key===' ')keys.brake=false;});
+
+let speed=0,heading=0,cameraMode=0;
+document.getElementById('camera').addEventListener('click',()=>{cameraMode=(cameraMode+1)%2;});
+const speedEl=document.getElementById('speed');
+const clock=new THREE.Clock();
+let started=false;
+function animate(){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.035);
+ const accel=keys.gas?18:0,brake=keys.brake?27:0;
+ if(accel)speed+=accel*dt;
+ if(brake)speed-=brake*dt;
+ if(!keys.gas&&!keys.brake)speed*=Math.pow(.985,dt*60);
+ speed=THREE.MathUtils.clamp(speed,-13,48);
+ const steer=(keys.left?1:0)-(keys.right?1:0);
+ const steerPower=(.35+Math.min(Math.abs(speed)/18,1.3));
+ heading+=steer*steerPower*dt*(speed>=0?1:-1);
+ const forward=new THREE.Vector3(Math.sin(heading),0,Math.cos(heading));
+ car.position.addScaledVector(forward,speed*dt);
+ car.rotation.y=heading;
+ wheels.forEach((w,i)=>{w.rotation.x-=speed*dt/.48;if(i<2)w.rotation.y=steer*.32;});
+ speedEl.textContent=Math.round(Math.abs(speed)*3.6);
+ const target=new THREE.Vector3(car.position.x,car.position.y,car.position.z);
+ let camPos;
+ if(cameraMode===0){
+  camPos=target.clone().add(new THREE.Vector3(-Math.sin(heading)*8,5.2,-Math.cos(heading)*8));
+ }else{
+  camPos=target.clone().add(new THREE.Vector3(0,2.35,0)).add(forward.clone().multiplyScalar(.15));
+ }
+ camera.position.lerp(camPos,1-Math.pow(.001,dt));
+ const look=target.clone().add(new THREE.Vector3(0,cameraMode===0?1.4:1.5,0)).add(forward.clone().multiplyScalar(cameraMode===0?7:18));
+ camera.lookAt(look);
+ renderer.render(scene,camera);
+ if(!started){started=true;setTimeout(()=>notice.classList.add('hidden'),1800);}
+}
+animate();
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+ renderer.setPixelRatio(Math.min(devicePixelRatio,1.65));
+});
+</script>
+<script>if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(console.warn)); }</script>
+</body>
+</html>
